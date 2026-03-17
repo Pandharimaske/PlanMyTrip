@@ -1,0 +1,15 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.100.0",
+    "faiss-cpu>=1.13.2",
+    "langchain-groq>=1.1.2",
+    "sentence-transformers>=3.0.0",
+    "reportlab>=4.0.0",
+    "langgraph>=0.1.0",
+    "uvicorn>=0.30.0",
+]

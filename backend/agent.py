@@ -12,16 +12,15 @@ Agents:
 import os, json, asyncio
 from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
-from langchain_groq import ChatGroq
 from tools import get_weather, get_places
 
-llm = ChatGroq(
-    api_key=os.getenv("GROQ_API_KEY"),
-    model="llama3-70b-8192",
-    temperature=0.5,
-    max_tokens=4096,
-)
-
+# llm = ChatGroq(
+#     api_key=os.getenv("GROQ_API_KEY"),
+#     model="llama3-70b-8192",
+#     temperature=0.5,
+#     max_tokens=4096,
+# )
+llm = None
 # ── Shared State ─────────────────────────────────────────────────────────────
 
 class TripState(TypedDict):
@@ -176,18 +175,18 @@ Input:
 
 def build_graph():
     g = StateGraph(TripState)
-    g.add_node("weather", weather_agent)
-    g.add_node("places", places_agent)
-    g.add_node("planner", planner_agent)
-    g.add_node("constraint", constraint_agent)
-    g.add_node("explanation", explanation_agent)
+    g.add_node("weather_node", weather_agent)
+    g.add_node("places_node", places_agent)
+    g.add_node("planner_node", planner_agent)
+    g.add_node("constraint_node", constraint_agent)
+    g.add_node("explanation_node", explanation_agent)
 
-    g.set_entry_point("weather")
-    g.add_edge("weather", "places")
-    g.add_edge("places", "planner")
-    g.add_edge("planner", "constraint")
-    g.add_edge("constraint", "explanation")
-    g.add_edge("explanation", END)
+    g.set_entry_point("weather_node")
+    g.add_edge("weather_node", "places_node")
+    g.add_edge("places_node", "planner_node")
+    g.add_edge("planner_node", "constraint_node")
+    g.add_edge("constraint_node", "explanation_node")
+    g.add_edge("explanation_node", END)
     return g.compile()
 
 GRAPH = build_graph()

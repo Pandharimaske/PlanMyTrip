@@ -61,35 +61,55 @@ Final Itinerary + Map + Chat
 
 ## Setup (Local Dev)
 
+### Prerequisites
+- Python 3.11+
+- Node.js 18+
+- [uv](https://docs.astral.sh/uv/) (pip install uv)
+
 ### 1. Backend
 ```bash
 cd backend
 
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
+# Install dependencies using uv
+uv sync
 
-pip install -r requirements.txt
-
+# Copy and configure environment
 cp .env.example .env
-# Fill in .env:
+# Fill in .env with your API keys:
 #   GROQ_API_KEY=...
 #   GOOGLE_MAPS_API_KEY=...
 #   OPENWEATHER_API_KEY=...
 
-uvicorn main:app --reload --port 8000
+# Run the server (uv automatically uses .venv)
+.venv/bin/uvicorn main:app --reload --port 8000
 ```
 
 ### 2. Frontend
 ```bash
 cd frontend
 
+# Copy and configure environment
 cp .env.example .env
 # Fill in .env:
 #   VITE_GOOGLE_MAPS_KEY=...
 
+# Install and run
 npm install
 npm run dev
-# → http://localhost:3000
+# → http://localhost:5173
+```
+
+### Running Both Simultaneously
+**Terminal 1 (Backend):**
+```bash
+cd backend
+.venv/bin/uvicorn main:app --reload --port 8000
+```
+
+**Terminal 2 (Frontend):**
+```bash
+cd frontend
+npm run dev
 ```
 
 ---
