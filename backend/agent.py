@@ -2,17 +2,20 @@
 Multi-agent itinerary planner using LangGraph.
 
 Agents:
-  1. WeatherAgent     — fetches & summarises weather
-  2. PlacesAgent      — fetches & scores POIs
-  3. PlannerAgent     — builds raw day-wise itinerary
-  4. ConstraintAgent  — validates budget & feasibility
-  5. ExplanationAgent — adds tips, packing list, weather note
+  1. WeatherAgent        — fetches & summarises weather
+  2. PlacesAgent         — fetches & scores POIs
+  3. OptimizationAgent   — clusters & optimizes route efficiency
+  4. PlannerAgent        — builds day-wise itinerary with optimized places
+  5. ConstraintAgent     — validates budget & time feasibility
+  6. ExplanationAgent    — adds tips, packing list, weather note
 """
 
 import os, json, asyncio
 from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
 from tools import get_weather, get_places
+from optimization_agent import optimize_places_for_trip
+from user_preferences import get_or_create_user_profile
 
 # llm = ChatGroq(
 #     api_key=os.getenv("GROQ_API_KEY"),
@@ -29,8 +32,12 @@ class TripState(TypedDict):
     budget: float
     interests: List[str]
     travel_type: str
+    user_id: str
     weather: dict
     places: List[dict]
+    optimized_places: List[dict]
+    day_routes: List[List[dict]]
+    optimization_insights: dict
     raw_itinerary: dict
     validated_itinerary: dict
     final_itinerary: dict
@@ -71,13 +78,49 @@ def places_agent(state: TripState) -> TripState:
     state["places"] = places
     return state
 
-# ── Agent 3: Planner ─────────────────────────────────────────────────────────
+# ── Agent 3: Optimization ────────────────────────────────────────────────────
+
+def optimization_agent(state: TripState) -> TripState:
+    """Optimize places using clustering, scoring, and route optimization."""
+    try:
+        optimization_result = optimize_places_for_trip(
+            places=state["places"],
+            interests=state["interests"],
+            budget=state["budget"],
+            days=state["days"],
+            travel_type=state["travel_type"],
+            user_id=state.get("user_id", "default"),
+        )
+        
+        state["optimized_places"] = optimization_result.get("optimized_places", [])
+        state["day_routes"] = optimization_result.get("day_routes", [])
+        state["optimization_insights"] = optimization_result.get("insights", {})
+    except Exception as e:
+        # If optimization fails, fall back to original places
+        state["optimized_places"] = state["places"]
+        state["day_routes"] = []
+        state["optimization_insights"] = {"error": str(e)}
+    
+    return state
+
+# ── Agent 4: Planner ────────────────────────────────────────────────────────
 
 def planner_agent(state: TripState) -> TripState:
+    # Use optimized places if available, otherwise fall back to raw places
+    places_to_use = state.get("optimized_places", state.get("places", []))
+    
+    # If we have optimized routes, use them as hints for clustering
+    route_hints = ""
+    if state.get("day_routes"):
+        for day_idx, day_route in enumerate(state["day_routes"][:state["days"]], 1):
+            if day_route:
+                route_hints += f"\nDay {day_idx} suggested places: {', '.join(p['name'] for p in day_route[:3])}"
+    
     places_text = "\n".join([
-        f"- {p['name']} | Rating: {p['rating']} | {p['address']} | lat:{p['lat']:.4f} lng:{p['lng']:.4f}"
-        for p in state["places"]
+        f"- {p['name']} | Rating: {p['rating']} | Score: {p.get('score', 0)} | {p['address']} | lat:{p['lat']:.4f} lng:{p['lng']:.4f}"
+        for p in places_to_use
     ])
+    
     w = state["weather"]
     weather_str = f"{w.get('description','')}, {w.get('temp',28)}°C, humidity {w.get('humidity',60)}%"
 
@@ -89,14 +132,17 @@ Trip info:
 - Interests: {', '.join(state['interests'])}
 - Weather: {weather_str}
 
-Available places (USE ONLY THESE, include lat/lng from list):
+Optimization hints (places already grouped for efficiency):{route_hints}
+
+Available places (scored by relevance, USE ONLY THESE, include lat/lng from list):
 {places_text}
 
 Rules:
-- Group nearby places (same lat/lng area) on the same day
+- Follow the suggested grouping for each day to minimize travel time
 - Each day has morning, afternoon, evening
 - Realistic Indian pricing in ₹
 - day_total_cost = sum of all 3 slot costs
+- Prefer places with higher scores above
 
 Return ONLY valid JSON:
 {{
@@ -118,17 +164,35 @@ Return ONLY valid JSON:
     state["raw_itinerary"] = result
     return state
 
-# ── Agent 4: Constraint ──────────────────────────────────────────────────────
+# ── Agent 5: Constraint ──────────────────────────────────────────────────────
 
 def constraint_agent(state: TripState) -> TripState:
     raw = state["raw_itinerary"]
     budget = state["budget"]
+    
+    # Enhanced validation using new constraints module
+    from constraints import ConstraintValidator
+    validator = ConstraintValidator(budget, state["days"], state["travel_type"])
+    
+    # Prepare validation context
+    validation_info = f"""
+Budget validation ({validator.travel_type} trip):
+- Total budget: ₹{int(budget)}
+- Daily budget: ₹{int(validator.daily_budget)}
+- Number of days: {state['days']}
+
+Optimization insights:
+- Total places selected: {len(state.get('optimized_places', state['places']))}
+- Route clustering quality: {state.get('optimization_insights', {}).get('optimization_quality', 'unknown')}
+"""
 
     prompt = f"""You are a budget validation AI. Review this itinerary and fix:
 1. total_estimated_cost must NOT exceed ₹{int(budget)}
 2. Each day_total_cost must equal morning.cost + afternoon.cost + evening.cost
 3. budget_breakdown values must sum to total_estimated_cost
 4. No 0-cost slots allowed
+5. Consider {validator.travel_type}-specific budget distribution
+{validation_info}
 
 Return the CORRECTED itinerary as ONLY valid JSON, same structure.
 
@@ -141,17 +205,29 @@ Itinerary:
         state["validated_itinerary"] = raw
     return state
 
-# ── Agent 5: Explanation ─────────────────────────────────────────────────────
+# ── Agent 6: Explanation ────────────────────────────────────────────────────
 
 def explanation_agent(state: TripState) -> TripState:
     validated = state["validated_itinerary"]
     w = state["weather"]
     weather_str = f"{w.get('description','')}, {w.get('temp',28)}°C"
+    
+    # Add optimization insights to the prompt
+    insights_text = ""
+    if state.get("optimization_insights"):
+        insights = state["optimization_insights"]
+        insights_text = f"""
+Route Optimization Quality: {insights.get('optimization_quality', 'good')}
+Daily average utilization: {sum(r.get('utilization_percent', 50) for r in insights.get('feasibility_reports', [{}])) / max(1, len(insights.get('feasibility_reports', [{}]))) if isinstance(insights.get('feasibility_reports'), list) else 'N/A'}%
+Place type diversity: {insights.get('place_type_diversity', {}).get('total_types', 'varied')} types
+"""
 
     prompt = f"""You are a travel guide AI. Add these fields to the itinerary JSON:
 1. "weather_note": one sentence travel advisory for {state['destination']} given "{weather_str}"
 2. "tip" field inside each day object: one practical, specific travel tip for that day
 3. "packing_tips": list of exactly 4 items to pack for this specific trip
+4. "optimization_notes": brief note about route efficiency based on:
+{insights_text}
 
 Return the COMPLETE JSON with additions. ONLY valid JSON, no extra text.
 
@@ -167,7 +243,8 @@ Input:
     result["total_days"] = state["days"]
     result["total_budget"] = state["budget"]
     result["weather"] = state["weather"]
-    result["places_data"] = state["places"]
+    result["places_data"] = state.get("optimized_places", state["places"])
+    result["optimization"] = state.get("optimization_insights", {})
     state["final_itinerary"] = result
     return state
 
@@ -177,13 +254,15 @@ def build_graph():
     g = StateGraph(TripState)
     g.add_node("weather_node", weather_agent)
     g.add_node("places_node", places_agent)
+    g.add_node("optimization_node", optimization_agent)
     g.add_node("planner_node", planner_agent)
     g.add_node("constraint_node", constraint_agent)
     g.add_node("explanation_node", explanation_agent)
 
     g.set_entry_point("weather_node")
     g.add_edge("weather_node", "places_node")
-    g.add_edge("places_node", "planner_node")
+    g.add_edge("places_node", "optimization_node")
+    g.add_edge("optimization_node", "planner_node")
     g.add_edge("planner_node", "constraint_node")
     g.add_edge("constraint_node", "explanation_node")
     g.add_edge("explanation_node", END)
@@ -192,14 +271,32 @@ def build_graph():
 GRAPH = build_graph()
 
 async def generate_itinerary(req) -> dict:
+    # Initialize LLM if using LangChain
+    global llm
+    if llm is None:
+        try:
+            from langchain_groq import ChatGroq
+            llm = ChatGroq(
+                api_key=os.getenv("GROQ_API_KEY"),
+                model="llama3-70b-8192",
+                temperature=0.5,
+                max_tokens=4096,
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize LLM: {str(e)}")
+    
     initial: TripState = {
         "destination": req.destination,
         "days": req.days,
         "budget": req.budget,
         "interests": req.interests,
         "travel_type": req.travel_type,
+        "user_id": getattr(req, "user_id", "default"),
         "weather": {},
         "places": [],
+        "optimized_places": [],
+        "day_routes": [],
+        "optimization_insights": {},
         "raw_itinerary": {},
         "validated_itinerary": {},
         "final_itinerary": {},
