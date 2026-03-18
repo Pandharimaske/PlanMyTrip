@@ -234,7 +234,12 @@ Place type diversity: {insights.get('place_type_diversity', {}).get('total_types
     prompt = f"""You are a travel guide AI. Add these fields to the itinerary JSON:
 1. "weather_note": one sentence travel advisory for {state['destination']} given "{weather_str}"
 2. "tip" field inside each day object: one practical, specific travel tip for that day
-3. "packing_tips": list of exactly 4 items to pack for this specific trip
+3. "packing_tips": list of 8-10 practical items grouped by category like this:
+   ["👕 Clothing: 3-4 t-shirts, light pants, comfortable shoes",
+    "🧴 Toiletries: sunscreen, medications, deodorant",
+    "📱 Tech: power bank, phone charger, adapters",
+    "📄 Documents: ID, tickets, travel insurance",
+    "💊 Health: pain reliever, antidiarrheal, first aid kit"]
 4. "optimization_notes": brief note about route efficiency based on:
 {insights_text}
 

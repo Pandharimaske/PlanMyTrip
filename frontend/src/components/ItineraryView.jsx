@@ -19,7 +19,11 @@ function WeatherBadge({ weather }) {
   )
 }
 
-function SlotCard({ slot, type }) {
+function SlotCard({ slot, type, index, dayPlaces }) {
+  const nextSlot = index < dayPlaces.length - 1 ? dayPlaces[index + 1] : null
+  const distance = nextSlot ? Math.round(Math.sqrt(Math.pow(nextSlot.lat - slot.lat, 2) + Math.pow(nextSlot.lng - slot.lng, 2)) * 111) : 0
+  const estimatedTravelTime = nextSlot ? Math.ceil(distance / 15) : 0
+  
   return (
     <div className={`slot-card p-4 bg-gradient-to-br ${SLOT_COLORS[type]}`}>
       <div className="flex items-center gap-2 mb-2">
@@ -29,7 +33,30 @@ function SlotCard({ slot, type }) {
       </div>
       <p className="font-semibold text-white text-sm mb-1">{slot.place}</p>
       <p className="text-gray-400 text-xs mb-1">{slot.activity}</p>
-      <p className="text-gray-500 text-xs">⏱ {slot.duration}</p>
+      <p className="text-gray-500 text-xs mb-2">⏱ {slot.duration}</p>
+      
+      {/* Cost Breakdown */}
+      <div className="bg-black/20 rounded px-2 py-1.5 mb-2 text-xs space-y-0.5 border-l-2 border-yellow-500/50">
+        <div className="flex justify-between text-gray-300">
+          <span>💳 Entry:</span>
+          <span className="text-yellow-300">₹{Math.round(slot.cost * 0.4)}</span>
+        </div>
+        <div className="flex justify-between text-gray-300">
+          <span>🍽 Food:</span>
+          <span className="text-yellow-300">₹{Math.round(slot.cost * 0.35)}</span>
+        </div>
+        <div className="flex justify-between text-gray-300">
+          <span>🚕 Transport:</span>
+          <span className="text-yellow-300">₹{Math.round(slot.cost * 0.25)}</span>
+        </div>
+      </div>
+      
+      {/* Travel to next */}
+      {nextSlot && (
+        <div className="text-xs text-orange-300 bg-orange-500/10 rounded px-2 py-1 border border-orange-500/20">
+          → Next: {distance}km ({estimatedTravelTime}min)
+        </div>
+      )}
     </div>
   )
 }
@@ -53,7 +80,22 @@ function DayCard({ day, index }) {
       {open && (
         <div className="px-6 pb-6 space-y-3">
           <div className="grid gap-3">
-            {['morning','afternoon','evening'].map(s => day[s] && <SlotCard key={s} slot={day[s]} type={s} />)}
+            {(() => {
+              const slots = [
+                { slot: day.morning, type: 'morning' },
+                { slot: day.afternoon, type: 'afternoon' },
+                { slot: day.evening, type: 'evening' },
+              ].filter(s => s.slot)
+              return slots.map((s, idx) => (
+                <SlotCard 
+                  key={s.type} 
+                  slot={s.slot} 
+                  type={s.type}
+                  index={idx}
+                  dayPlaces={slots.map(x => x.slot)}
+                />
+              ))
+            })()}
           </div>
           {day.tip && (
             <div className="flex gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
@@ -116,6 +158,15 @@ export default function ItineraryView({ data, onReset, userId }) {
 
   return (
     <div className="space-y-5 fade-in">
+      {/* Sticky Back Button */}
+      <div className="flex items-center gap-2 mb-4">
+        <button onClick={onReset}
+          className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-600/20 to-pink-600/20 border border-purple-500/30 hover:border-purple-500/60 rounded-lg text-sm text-purple-300 hover:text-purple-200 transition font-semibold">
+          ← Back to Home
+        </button>
+        <p className="text-xs text-gray-500 ml-auto">Viewing trip details • Use chat on right to modify</p>
+      </div>
+
       <div className="card p-6">
         <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
           <div>
@@ -130,10 +181,6 @@ export default function ItineraryView({ data, onReset, userId }) {
             <button onClick={handlePDF} disabled={exporting}
               className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-gray-300 hover:border-pink-500/50 hover:text-pink-400 transition disabled:opacity-50">
               {exporting ? '⏳ Generating...' : '📄 Export PDF'}
-            </button>
-            <button onClick={onReset}
-              className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-gray-400 hover:text-white hover:border-white/30 transition">
-              ← New Trip
             </button>
           </div>
         </div>
@@ -234,20 +281,26 @@ export default function ItineraryView({ data, onReset, userId }) {
       <div>
         <h3 className="font-semibold text-white mb-3 px-1">📅 Day-wise Itinerary</h3>
         <div className="space-y-3">
-          {days?.map((day, i) => <DayCard key={day.day} day={day} index={i} />)}
+          {days?.map((day, i) => (
+        <DayCard key={day.day} day={day} index={i} />
+      ))}
         </div>
       </div>
 
       {packing_tips?.length > 0 && (
         <div className="card p-6">
-          <h3 className="font-semibold text-white mb-3">🎒 Packing Tips</h3>
-          <ul className="space-y-2">
-            {packing_tips.map((tip, i) => (
-              <li key={i} className="flex gap-2 text-sm text-gray-400">
-                <span className="text-purple-400">→</span> {tip}
-              </li>
-            ))}
-          </ul>
+          <h3 className="font-semibold text-white mb-4 text-lg">🎒 Smart Packing List</h3>
+          <div className="space-y-3">
+            {packing_tips.map((tip, i) => {
+              const [icon, content] = tip.includes(':') ? [tip.split(':')[0], tip.split(':')[1]?.trim()] : ['📦', tip]
+              return (
+                <div key={i} className="bg-white/5 border border-white/10 rounded-lg p-3">
+                  <p className="font-semibold text-sm text-white mb-1">{icon}</p>
+                  <p className="text-sm text-gray-300 leading-relaxed">{content || tip}</p>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

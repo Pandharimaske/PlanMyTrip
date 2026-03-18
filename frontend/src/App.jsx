@@ -36,10 +36,12 @@ export default function App() {
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #0f0f0f 0%, #1a0a2e 50%, #0f0f0f 100%)' }}>
       <nav className="border-b border-white/5 px-6 py-4 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-sm">
-          ✈️
-        </div>
-        <span className="font-bold text-lg gradient-text">PlanMyTrip</span>
+        <button onClick={() => setItinerary(null)} className="flex items-center gap-3 hover:opacity-80 transition">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-sm">
+            ✈️
+          </div>
+          <span className="font-bold text-lg gradient-text">PlanMyTrip</span>
+        </button>
         <span className="ml-2 text-xs text-gray-600 hidden sm:block">AI-Powered Travel Planner</span>
         <div className="ml-4 hidden md:flex gap-1">
           {['Weather','Places','Planner','Constraint','Explanation'].map(a => (
