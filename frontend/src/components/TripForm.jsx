@@ -22,13 +22,15 @@ const TRAVEL_TYPES = [
   { id: 'group', label: '👥 Group' },
 ]
 
-export default function TripForm({ onSubmit, loading }) {
+export default function TripForm({ onSubmit, loading, agentProgress = [] }) {
   const [form, setForm] = useState({
     destination: '',
     days: 3,
     budget: 10000,
     interests: [],
     travel_type: 'solo',
+    start_date: '',
+    end_date: '',
   })
 
   const toggleInterest = (id) => {
@@ -79,6 +81,25 @@ export default function TripForm({ onSubmit, loading }) {
         </div>
       </div>
 
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-semibold text-purple-300 mb-2">📆 Start Date (optional)</label>
+          <input
+            type="date" value={form.start_date}
+            onChange={e => setForm({ ...form, start_date: e.target.value })}
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-purple-300 mb-2">📆 End Date (optional)</label>
+          <input
+            type="date" value={form.end_date}
+            onChange={e => setForm({ ...form, end_date: e.target.value })}
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition"
+          />
+        </div>
+      </div>
+
       <div>
         <label className="block text-sm font-semibold text-purple-300 mb-2">🧳 Travel Type</label>
         <div className="grid grid-cols-4 gap-2">
@@ -115,10 +136,30 @@ export default function TripForm({ onSubmit, loading }) {
 
       <button type="submit" disabled={loading} className="glow-btn w-full py-4 rounded-xl text-white font-bold text-lg">
         {loading ? (
-          <span className="flex items-center justify-center gap-3">
-            <span className="loading-spinner inline-block" style={{width:22,height:22,borderWidth:2}} />
-            Generating your itinerary...
-          </span>
+          <div className="flex flex-col items-center gap-3">
+            <span className="flex items-center justify-center gap-3">
+              <span className="loading-spinner inline-block" style={{width:22,height:22,borderWidth:2}} />
+              <span>Generating your itinerary...</span>
+            </span>
+            {agentProgress.length > 0 && (
+              <div className="w-full mt-2 bg-black/40 rounded-lg p-2 text-xs">
+                <div className="text-gray-300 mb-2">Agent Progress:</div>
+                <div className="space-y-1.5">
+                  {['🌤️  Weather', '📍 Places & Accommodations', '⚡ Route Optimization', '📋 Itinerary Planner', '💰 Budget Validator', '✨ Polish & Tips'].map((agent) => {
+                    const completed = agentProgress.some(p => p.name === agent && p.status === 'complete')
+                    return (
+                      <div key={agent} className="flex items-center gap-2 text-xs">
+                        <span className={completed ? 'text-green-400' : 'text-gray-500'}>
+                          {completed ? '✓' : '○'}
+                        </span>
+                        <span className={completed ? 'text-green-300' : 'text-gray-400'}>{agent}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         ) : '✈️ Generate My Trip Plan'}
       </button>
     </form>

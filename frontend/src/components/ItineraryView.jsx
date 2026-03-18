@@ -172,6 +172,12 @@ export default function ItineraryView({ data, onReset, userId }) {
           <div>
             <h2 className="text-2xl font-bold gradient-text">{destination}</h2>
             <p className="text-gray-400 text-sm mt-1">{total_days}-day itinerary · {data.travel_type || 'Trip'}</p>
+            {(data.start_date || data.end_date) && (
+              <p className="text-gray-500 text-xs mt-2">
+                📅 {data.start_date ? new Date(data.start_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Start'} 
+                {data.end_date && ` - ${new Date(data.end_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}`}
+              </p>
+            )}
           </div>
           <div className="flex gap-2 flex-wrap">
             <button onClick={handleSave} disabled={saving || saved}

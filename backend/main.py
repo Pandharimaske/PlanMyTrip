@@ -39,6 +39,8 @@ class TripRequest(BaseModel):
     interests: List[str]
     travel_type: str
     user_id: str = "default"
+    start_date: Optional[str] = None  # YYYY-MM-DD format
+    end_date: Optional[str] = None    # YYYY-MM-DD format
 
 class SaveTripRequest(BaseModel):
     itinerary: dict
