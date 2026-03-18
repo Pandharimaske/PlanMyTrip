@@ -67,7 +67,7 @@ function DayCard({ day, index }) {
   )
 }
 
-export default function ItineraryView({ data, onReset, googleMapsKey, userId }) {
+export default function ItineraryView({ data, onReset, userId }) {
   const [saving, setSaving]       = useState(false)
   const [saved, setSaved]         = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -157,7 +157,53 @@ export default function ItineraryView({ data, onReset, googleMapsKey, userId }) 
         )}
       </div>
 
-      {googleMapsKey && <MapView itinerary={data} googleMapsKey={googleMapsKey} />}
+      <MapView itinerary={data} />
+
+      {data.hotels && data.hotels.length > 0 && (
+        <div className="card p-6">
+          <h3 className="font-semibold text-white mb-4">🏨 Accommodation Options</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {data.hotels.map((hotel, idx) => (
+              <div 
+                key={idx}
+                className={`p-4 rounded-lg border-2 transition cursor-pointer $
+                  idx === 1 
+                    ? 'bg-gradient-to-br from-purple-600/20 to-pink-600/20 border-purple-500/50'
+                    : 'bg-white/5 border-white/10 hover:border-white/30'
+                }`}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="font-semibold text-white text-sm">{hotel.name}</p>
+                    <p className="text-xs text-gray-400">{hotel.type}</p>
+                  </div>
+                  <span className="text-lg">⭐ {hotel.rating}</span>
+                </div>
+                <p className="text-xs text-gray-400 mb-2">{hotel.description}</p>
+                <p className="text-xs text-gray-500 mb-3">📍 {hotel.location}</p>
+                <div className="flex items-center justify-between">
+                  <div className="text-xs text-gray-400">
+                    <p>₹{hotel.price_per_night?.toLocaleString()}/night</p>
+                    <p className="text-green-400 font-semibold">Total: ₹{(hotel.price_per_night * total_days)?.toLocaleString()}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-1 justify-end">
+                    {hotel.amenities?.slice(0, 2).map((amenity, i) => (
+                      <span key={i} className="text-xs bg-white/10 px-2 py-1 rounded text-gray-300">{amenity}</span>
+                    ))}
+                  </div>
+                </div>
+                {idx === 1 && <p className="mt-2 text-xs text-purple-300">✓ Recommended</p>}
+              </div>
+            ))}
+          </div>
+          {data.accommodation_cost && (
+            <div className="mt-4 p-3 bg-purple-600/10 border border-purple-500/20 rounded-lg">
+              <p className="text-xs text-gray-400">Recommended accommodation cost:</p>
+              <p className="font-bold text-lg text-purple-300">₹{data.accommodation_cost?.toLocaleString()}</p>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="card p-6">
         <h3 className="font-semibold text-white mb-4">💰 Budget Overview</h3>

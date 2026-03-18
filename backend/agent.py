@@ -11,15 +11,19 @@ Agents:
 """
 
 import os, json, asyncio
+from dotenv import load_dotenv
 from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
-from tools import get_weather, get_places
+from tools import get_weather, get_places, get_hotels
 from optimization_agent import optimize_places_for_trip
 from user_preferences import get_or_create_user_profile
 
+# Load environment variables from .env file
+load_dotenv()
+
 # llm = ChatGroq(
 #     api_key=os.getenv("GROQ_API_KEY"),
-#     model="llama3-70b-8192",
+#     model="llama-3.3-70b-versatile",
 #     temperature=0.5,
 #     max_tokens=4096,
 # )
@@ -35,6 +39,7 @@ class TripState(TypedDict):
     user_id: str
     weather: dict
     places: List[dict]
+    hotels: List[dict]
     optimized_places: List[dict]
     day_routes: List[List[dict]]
     optimization_insights: dict
@@ -73,9 +78,13 @@ def places_agent(state: TripState) -> TripState:
         places = loop.run_until_complete(
             get_places(state["destination"], state["interests"], state["days"])
         )
+        hotels = loop.run_until_complete(
+            get_hotels(state["destination"], state["budget"], state["days"])
+        )
     finally:
         loop.close()
     state["places"] = places
+    state["hotels"] = hotels
     return state
 
 # ── Agent 3: Optimization ────────────────────────────────────────────────────
@@ -245,6 +254,11 @@ Input:
     result["weather"] = state["weather"]
     result["places_data"] = state.get("optimized_places", state["places"])
     result["optimization"] = state.get("optimization_insights", {})
+    result["hotels"] = state.get("hotels", [])
+    # Select best mid-range hotel by default
+    if state.get("hotels") and len(state["hotels"]) > 1:
+        result["selected_hotel"] = state["hotels"][1]  # Mid-range hotel
+        result["accommodation_cost"] = state["hotels"][1]["price_per_night"] * state["days"]
     state["final_itinerary"] = result
     return state
 
@@ -278,7 +292,7 @@ async def generate_itinerary(req) -> dict:
             from langchain_groq import ChatGroq
             llm = ChatGroq(
                 api_key=os.getenv("GROQ_API_KEY"),
-                model="llama3-70b-8192",
+                model="llama-3.3-70b-versatile",
                 temperature=0.5,
                 max_tokens=4096,
             )
@@ -294,6 +308,7 @@ async def generate_itinerary(req) -> dict:
         "user_id": getattr(req, "user_id", "default"),
         "weather": {},
         "places": [],
+        "hotels": [],
         "optimized_places": [],
         "day_routes": [],
         "optimization_insights": {},

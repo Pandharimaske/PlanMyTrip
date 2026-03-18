@@ -8,11 +8,15 @@ Lets users modify itinerary via natural language:
 """
 
 import os, json
+from dotenv import load_dotenv
 from langchain_groq import ChatGroq
+
+# Load environment variables from .env file
+load_dotenv()
 
 llm = ChatGroq(
     api_key=os.getenv("GROQ_API_KEY"),
-    model="llama3-70b-8192",
+    model="llama-3.3-70b-versatile",
     temperature=0.6,
     max_tokens=4096,
 )
@@ -20,8 +24,8 @@ llm = ChatGroq(
 SYSTEM_PROMPT = """You are PlanMyTrip's AI travel assistant. You have access to the user's current itinerary.
 
 You can:
-1. MODIFY the itinerary based on user requests (change places, adjust budget, swap days, add/remove activities)
-2. ANSWER questions about the trip (costs, timings, distances, what to expect)
+1. MODIFY the itinerary based on user requests (change places, adjust budget, swap days, add/remove activities, change hotel)
+2. ANSWER questions about the trip (costs, timings, distances, what to expect, hotel options)
 3. SUGGEST alternatives when asked
 
 Response rules:
@@ -32,6 +36,9 @@ Response rules:
 - ALWAYS return valid JSON only, no extra text
 - Keep the same JSON structure as the original itinerary
 - Be conversational and helpful in the message field
+- For hotel changes: select from available hotels and update selected_hotel and accommodation_cost
+- For updates, be specific about what changed
+- Keep messages concise and to the point
 """
 
 async def handle_chat(message: str, itinerary: dict, history: list) -> dict:

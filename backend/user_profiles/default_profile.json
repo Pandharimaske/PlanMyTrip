@@ -1,0 +1,35 @@
+{
+  "user_id": "default",
+  "created_at": "2026-03-18T12:52:38.469199",
+  "trips_count": 1,
+  "interest_preferences": {},
+  "budget_preferences": {
+    "average_budget": 10000,
+    "budget_per_day_avg": 3333,
+    "spent_percent_avg": 44.0
+  },
+  "travel_patterns": {
+    "preferred_duration": 3,
+    "travel_type_distribution": {},
+    "favorite_destinations": [
+      "Manali"
+    ],
+    "travel_pace": "moderate"
+  },
+  "cost_preferences": {
+    "accommodation_percent": 34,
+    "food_percent": 27,
+    "activities_percent": 20,
+    "transport_percent": 18
+  },
+  "visit_history": [
+    {
+      "destination": "Manali",
+      "date": "2026-03-18T12:52:38.469248",
+      "days": 3,
+      "budget": 10000,
+      "cost": 4400,
+      "pace": "moderate"
+    }
+  ]
+}

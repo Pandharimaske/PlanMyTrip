@@ -4,8 +4,6 @@ import ItineraryView from './components/ItineraryView'
 import PastTrips from './components/PastTrips'
 import ChatInterface from './components/ChatInterface'
 
-const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY || ''
-
 export default function App() {
   const [itinerary, setItinerary] = useState(null)
   const [loading, setLoading]     = useState(false)
@@ -82,7 +80,6 @@ export default function App() {
             <ItineraryView
               data={itinerary}
               onReset={() => setItinerary(null)}
-              googleMapsKey={GOOGLE_MAPS_KEY}
               userId={userId}
             />
             <ChatInterface

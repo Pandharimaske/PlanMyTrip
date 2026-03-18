@@ -4,6 +4,10 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import io
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from agent import generate_itinerary
 from memory import save_trip, get_past_trips, get_trip_by_id, get_similar_trips

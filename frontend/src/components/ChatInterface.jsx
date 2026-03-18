@@ -1,18 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react'
 
-const SUGGESTIONS = [
-  "Replace Day 1 evening with something more adventurous",
-  "My budget changed to ₹5000, please adjust",
-  "Add more food spots on Day 2",
-  "What's the best time to visit these places?",
-  "Swap Day 1 and Day 2",
-]
-
 function Message({ msg }) {
   const isUser = msg.role === 'user'
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-      {/* Avatar */}
       <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold
         ${isUser
           ? 'bg-gradient-to-br from-pink-600 to-purple-600'
@@ -21,17 +12,26 @@ function Message({ msg }) {
         {isUser ? '👤' : '✈️'}
       </div>
 
-      {/* Bubble */}
-      <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed
+      <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed break-words
         ${isUser
           ? 'bg-gradient-to-br from-pink-600/30 to-purple-600/30 border border-pink-500/20 text-white rounded-tr-sm'
           : 'bg-white/5 border border-white/10 text-gray-200 rounded-tl-sm'
         }`}>
         {msg.content}
         {msg.updated && (
-          <span className="block mt-2 text-xs text-green-400 font-semibold">
+          <span className="block mt-2 text-xs text-green-400 font-semibold animate-pulse">
             ✅ Itinerary updated
           </span>
+        )}
+        {msg.changes && msg.changes.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-white/10 text-xs text-gray-300">
+            <span className="font-semibold text-green-400">Changes:</span>
+            <div className="mt-1 space-y-1">
+              {msg.changes.map((change, i) => (
+                <div key={i} className="text-green-300/80">• {change}</div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -52,23 +52,76 @@ function TypingIndicator() {
   )
 }
 
+function getSmartSuggestions(itinerary) {
+  if (!itinerary) return []
+  
+  const suggestions = [
+    `Change hotel to ${itinerary.hotels?.[0]?.type || 'luxury option'}`,
+    `Adjust my budget to something more affordable`,
+    `Show me other accommodation options`,
+    `Add more ${itinerary.interests?.[0] || 'fun'} activities`,
+  ]
+  return suggestions
+}
+
 export default function ChatInterface({ itinerary, onItineraryUpdate }) {
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: `I'm your travel assistant for this ${itinerary?.destination} trip! Ask me to modify any part of the itinerary, adjust the budget, or answer questions about the plan. 🗺️`
-    }
-  ])
+  const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const [hasUpdate, setHasUpdate] = useState(false)
+  const [suggestions, setSuggestions] = useState([])
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
+
+  // Initialize suggestions when itinerary or chat opens
+  useEffect(() => {
+    if (isOpen && messages.length === 0) {
+      setSuggestions(getSmartSuggestions(itinerary))
+      setMessages([{
+        role: 'assistant',
+        content: `Ready to refine your ${itinerary?.destination} itinerary! Tell me what you'd like to change. 🎯`
+      }])
+    }
+  }, [isOpen, itinerary])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
+
+  const detectChanges = (oldItin, newItin) => {
+    const changes = []
+    
+    if (oldItin.total_budget !== newItin.total_budget) {
+      changes.push(`Budget: ₹${oldItin.total_budget} → ₹${newItin.total_budget}`)
+    }
+    
+    if (oldItin.total_estimated_cost !== newItin.total_estimated_cost) {
+      changes.push(`Cost: ₹${oldItin.total_estimated_cost} → ₹${newItin.total_estimated_cost}`)
+    }
+    
+    if (oldItin.selected_hotel?.name !== newItin.selected_hotel?.name) {
+      changes.push(`Hotel: ${newItin.selected_hotel?.name}`)
+    }
+    
+    if (oldItin.accommodation_cost !== newItin.accommodation_cost) {
+      changes.push(`Accommodation: ₹${oldItin.accommodation_cost} → ₹${newItin.accommodation_cost}`)
+    }
+    
+    if (JSON.stringify(oldItin.days) !== JSON.stringify(newItin.days)) {
+      const updatedDays = []
+      for (let i = 0; i < Math.min(oldItin.days.length, newItin.days.length); i++) {
+        if (JSON.stringify(oldItin.days[i]) !== JSON.stringify(newItin.days[i])) {
+          updatedDays.push(i + 1)
+        }
+      }
+      if (updatedDays.length > 0) {
+        changes.push(`Day${updatedDays.length > 1 ? 's' : ''} updated: ${updatedDays.join(', ')}`)
+      }
+    }
+    
+    return changes
+  }
 
   const send = async (text) => {
     const msg = text || input.trim()
@@ -76,6 +129,7 @@ export default function ChatInterface({ itinerary, onItineraryUpdate }) {
 
     setInput('')
     setLoading(true)
+    setSuggestions([])
 
     const newMessages = [...messages, { role: 'user', content: msg }]
     setMessages(newMessages)
@@ -99,13 +153,15 @@ export default function ChatInterface({ itinerary, onItineraryUpdate }) {
       const data = await res.json()
 
       if (data.type === 'update' && data.itinerary) {
+        const changes = detectChanges(itinerary, data.itinerary)
         onItineraryUpdate(data.itinerary)
         setHasUpdate(true)
-        setTimeout(() => setHasUpdate(false), 3000)
+        setTimeout(() => setHasUpdate(false), 4000)
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: data.message || 'Done! I updated your itinerary.',
+          content: data.message || '✅ Done! I updated your itinerary.',
           updated: true,
+          changes: changes,
         }])
       } else {
         setMessages(prev => [...prev, {
@@ -113,13 +169,14 @@ export default function ChatInterface({ itinerary, onItineraryUpdate }) {
           content: data.message || 'Got it!',
         }])
       }
-    } catch {
+    } catch (err) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Something went wrong. Please try again.',
+        content: '❌ Something went wrong. Please try again.',
       }])
     } finally {
       setLoading(false)
+      setSuggestions(getSmartSuggestions(itinerary))
       inputRef.current?.focus()
     }
   }
@@ -138,11 +195,11 @@ export default function ChatInterface({ itinerary, onItineraryUpdate }) {
       {/* Floating button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full glow-btn flex items-center justify-center text-2xl shadow-2xl"
+        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full glow-btn flex items-center justify-center text-2xl shadow-2xl hover:scale-110 transition-transform"
       >
         {isOpen ? '✕' : '💬'}
         {hasUpdate && (
-          <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-black" />
+          <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-slate-950 animate-pulse" />
         )}
       </button>
 
@@ -150,22 +207,22 @@ export default function ChatInterface({ itinerary, onItineraryUpdate }) {
       {isOpen && (
         <div className="fixed bottom-24 right-6 z-50 w-96 max-w-[calc(100vw-3rem)] flex flex-col"
           style={{
-            height: '520px',
-            background: 'rgba(15,10,30,0.97)',
-            border: '1px solid rgba(124,58,237,0.3)',
+            height: '580px',
+            background: 'rgba(15,10,30,0.98)',
+            border: '1px solid rgba(124,58,237,0.4)',
             borderRadius: '20px',
-            boxShadow: '0 25px 60px rgba(0,0,0,0.6), 0 0 40px rgba(124,58,237,0.1)',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.7), 0 0 40px rgba(124,58,237,0.15)',
             backdropFilter: 'blur(20px)',
           }}>
 
           {/* Header */}
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10">
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10 bg-gradient-to-r from-purple-600/10 to-pink-600/10">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-sm">✈️</div>
-            <div>
-              <p className="text-sm font-semibold text-white">Trip Assistant</p>
-              <p className="text-xs text-gray-500">{itinerary.destination} · {itinerary.total_days} days</p>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-white">Trip Refinement</p>
+              <p className="text-xs text-gray-400">{itinerary.destination} • {itinerary.total_days} days</p>
             </div>
-            <div className="ml-auto w-2 h-2 rounded-full bg-green-400" title="Online" />
+            <div className="w-2 h-2 rounded-full bg-green-400" title="Ready to refine" />
           </div>
 
           {/* Messages */}
@@ -176,49 +233,44 @@ export default function ChatInterface({ itinerary, onItineraryUpdate }) {
           </div>
 
           {/* Suggestions */}
-          {messages.length === 1 && (
-            <div className="px-3 pb-2 flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-              {SUGGESTIONS.slice(0,3).map(s => (
-                <button
-                  key={s}
-                  onClick={() => send(s)}
-                  className="flex-shrink-0 text-xs bg-purple-600/20 border border-purple-500/30 text-purple-300 rounded-full px-3 py-1.5 hover:bg-purple-600/40 transition whitespace-nowrap"
-                >
-                  {s}
-                </button>
-              ))}
+          {suggestions.length > 0 && (
+            <div className="px-3 pb-3 flex flex-col gap-2">
+              <p className="text-xs text-gray-500 px-1">Try asking:</p>
+              <div className="space-y-2">
+                {suggestions.slice(0, 2).map((s, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => send(s)}
+                    className="w-full text-xs text-left bg-purple-600/15 border border-purple-500/30 text-purple-200 rounded-lg px-3 py-2 hover:bg-purple-600/30 transition line-clamp-2"
+                  >
+                    💡 {s}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
           {/* Input */}
-          <div className="p-3 border-t border-white/10 flex gap-2">
+          <div className="p-3 border-t border-white/10 bg-gradient-to-r from-purple-600/5 to-pink-600/5 flex gap-2">
             <textarea
               ref={inputRef}
               value={input}
-              onChange={e => setInput(e.target.value)}
+              onChange={e => setInput(e.target.value.slice(0, 500))}
               onKeyDown={handleKey}
-              placeholder="Ask me to change anything..."
-              rows={1}
-              className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 resize-none"
-              style={{ maxHeight: '80px' }}
+              placeholder="Ask me anything..."
+              className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 resize-none"
+              rows="3"
             />
             <button
               onClick={() => send()}
-              disabled={!input.trim() || loading}
-              className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-white flex-shrink-0 disabled:opacity-40 transition hover:opacity-90"
+              disabled={loading || !input.trim()}
+              className="flex-shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-lg hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
-              ↑
+              ➤
             </button>
           </div>
         </div>
       )}
-
-      <style>{`
-        @keyframes bounce {
-          0%, 100% { transform: translateY(0); opacity: 0.5; }
-          50% { transform: translateY(-4px); opacity: 1; }
-        }
-      `}</style>
     </>
   )
 }
