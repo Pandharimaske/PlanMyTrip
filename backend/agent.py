@@ -37,6 +37,8 @@ class TripState(TypedDict):
     interests: List[str]
     travel_type: str
     user_id: str
+    start_date: str  # YYYY-MM-DD or empty
+    end_date: str    # YYYY-MM-DD or empty
     weather: dict
     places: List[dict]
     hotels: List[dict]
@@ -47,6 +49,7 @@ class TripState(TypedDict):
     validated_itinerary: dict
     final_itinerary: dict
     error: str
+    agent_progress: List[dict]  # Track completed agents
 
 # ── Helper ───────────────────────────────────────────────────────────────────
 
@@ -68,6 +71,7 @@ def weather_agent(state: TripState) -> TripState:
     finally:
         loop.close()
     state["weather"] = weather
+    state["agent_progress"].append({"name": "🌤️  Weather", "status": "complete"})
     return state
 
 # ── Agent 2: Places ──────────────────────────────────────────────────────────
@@ -85,6 +89,7 @@ def places_agent(state: TripState) -> TripState:
         loop.close()
     state["places"] = places
     state["hotels"] = hotels
+    state["agent_progress"].append({"name": "📍 Places & Accommodations", "status": "complete"})
     return state
 
 # ── Agent 3: Optimization ────────────────────────────────────────────────────
@@ -110,6 +115,7 @@ def optimization_agent(state: TripState) -> TripState:
         state["day_routes"] = []
         state["optimization_insights"] = {"error": str(e)}
     
+    state["agent_progress"].append({"name": "⚡ Route Optimization", "status": "complete"})
     return state
 
 # ── Agent 4: Planner ────────────────────────────────────────────────────────
@@ -171,6 +177,7 @@ Return ONLY valid JSON:
 
     result = call_llm_json(prompt)
     state["raw_itinerary"] = result
+    state["agent_progress"].append({"name": "📋 Itinerary Planner", "status": "complete"})
     return state
 
 # ── Agent 5: Constraint ──────────────────────────────────────────────────────
@@ -212,6 +219,7 @@ Itinerary:
         state["validated_itinerary"] = call_llm_json(prompt)
     except Exception:
         state["validated_itinerary"] = raw
+    state["agent_progress"].append({"name": "💰 Budget Validator", "status": "complete"})
     return state
 
 # ── Agent 6: Explanation ────────────────────────────────────────────────────
@@ -256,15 +264,19 @@ Input:
     result["destination"] = state["destination"]
     result["total_days"] = state["days"]
     result["total_budget"] = state["budget"]
+    result["start_date"] = state.get("start_date", "")
+    result["end_date"] = state.get("end_date", "")
     result["weather"] = state["weather"]
     result["places_data"] = state.get("optimized_places", state["places"])
     result["optimization"] = state.get("optimization_insights", {})
     result["hotels"] = state.get("hotels", [])
+    result["agent_progress"] = state.get("agent_progress", [])
     # Select best mid-range hotel by default
     if state.get("hotels") and len(state["hotels"]) > 1:
         result["selected_hotel"] = state["hotels"][1]  # Mid-range hotel
         result["accommodation_cost"] = state["hotels"][1]["price_per_night"] * state["days"]
     state["final_itinerary"] = result
+    state["agent_progress"].append({"name": "✨ Polish & Tips", "status": "complete"})
     return state
 
 # ── Build Graph ───────────────────────────────────────────────────────────────
@@ -311,6 +323,8 @@ async def generate_itinerary(req) -> dict:
         "interests": req.interests,
         "travel_type": req.travel_type,
         "user_id": getattr(req, "user_id", "default"),
+        "start_date": getattr(req, "start_date", ""),
+        "end_date": getattr(req, "end_date", ""),
         "weather": {},
         "places": [],
         "hotels": [],
@@ -321,6 +335,7 @@ async def generate_itinerary(req) -> dict:
         "validated_itinerary": {},
         "final_itinerary": {},
         "error": "",
+        "agent_progress": [],
     }
 
     import concurrent.futures

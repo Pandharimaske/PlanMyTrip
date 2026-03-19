@@ -7,6 +7,7 @@ import ChatInterface from './components/ChatInterface'
 export default function App() {
   const [itinerary, setItinerary] = useState(null)
   const [loading, setLoading]     = useState(false)
+  const [agentProgress, setAgentProgress] = useState([])
   const [error, setError]         = useState(null)
   const [userId]                  = useState('default')
 
@@ -14,6 +15,7 @@ export default function App() {
     setLoading(true)
     setError(null)
     setItinerary(null)
+    setAgentProgress([])
     try {
       const res = await fetch('/api/plan', {
         method: 'POST',
@@ -25,6 +27,7 @@ export default function App() {
         throw new Error(err.detail || 'Something went wrong')
       }
       const data = await res.json()
+      setAgentProgress(data.agent_progress || [])
       setItinerary({ ...data, travel_type: formData.travel_type })
     } catch (e) {
       setError(e.message)
@@ -70,7 +73,7 @@ export default function App() {
                 ))}
               </div>
             </div>
-            <TripForm onSubmit={handleSubmit} loading={loading} />
+            <TripForm onSubmit={handleSubmit} loading={loading} agentProgress={agentProgress} />
             {error && (
               <div className="mt-4 bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm">
                 ⚠️ {error}
